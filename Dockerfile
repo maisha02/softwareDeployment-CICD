@@ -10,5 +10,5 @@ COPY . /app
 
 EXPOSE 5000
 
-# Run with gunicorn for a production-like server
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "app:create_app()"]
+# Run the simple Flask app using the builtin server (suitable for dev/small apps)
+CMD ["python", "app.py"]
