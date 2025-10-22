@@ -15,8 +15,8 @@ def test_index():
     client = app.test_client()
     resp = client.get('/')
     assert resp.status_code == 200
-    data = resp.get_json()
-    assert data == {"message": "Hello from Flask!"}
+    text = resp.get_data(as_text=True)
+    assert '<h1>Simple Flask App</h1>' in text
 
 
 def test_health():

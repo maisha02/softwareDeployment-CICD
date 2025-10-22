@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Simple Flask App</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <header>
+      <h1>Simple Flask App</h1>
+    </header>
+    <main>
+      <p id="greeting">Hello from Flask!</p>
+      <section>
+        <h2>Health</h2>
+        <button id="check-health">Check Health</button>
+        <pre id="health-result"></pre>
+      </section>
+    </main>
+
+    <script>
+      document.getElementById('check-health').addEventListener('click', async () => {
+        const res = await fetch('/health');
+        const data = await res.json();
+        document.getElementById('health-result').textContent = JSON.stringify(data, null, 2);
+      });
+    </script>
+  </body>
+</html>

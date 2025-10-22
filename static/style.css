@@ -1,0 +1,28 @@
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  margin: 0;
+  padding: 0;
+  color: #222;
+  background: #f7f9fb;
+}
+header {
+  background: #0366d6;
+  color: white;
+  padding: 1rem;
+}
+main {
+  padding: 1rem;
+}
+#health-result {
+  background: #fff;
+  padding: 0.5rem;
+  border: 1px solid #e1e4e8;
+  max-width: 600px;
+}
+button {
+  background: #0366d6;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
