@@ -5,7 +5,7 @@ def create_app():
 
     @app.route('/')
     def index():
-        return jsonify({"message": "Hello from aaaa!"}), 200
+        return jsonify({"message": "Hello from love!"}), 200
 
     @app.route('/health')
     def health():
