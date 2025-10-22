@@ -62,7 +62,7 @@ pipeline {
     stage('Deploy to EC2') {
       steps {
         // Use SSH private key from Jenkins credentials and pass it to ssh via -i so the pipeline doesn't require the ssh-agent plugin
-        withCredentials([sshUserPrivateKey(credentialsId: 'af3db482-5f36-4258-817f-abdbecabb900', keyFileVariable: 'EC2_KEY', usernameVariable: 'EC2_USER')]) {
+        withCredentials([sshUserPrivateKey(credentialsId: 'EC2_SSH', keyFileVariable: 'EC2_KEY', usernameVariable: 'EC2_USER')]) {
           // Pull image and restart container on remote host. Enable verbose ssh logging to surface connection/auth errors.
           sh '''
             set -x
