@@ -29,35 +29,29 @@ pipeline {
             }
             post {
                 success {
-                    steps {
-                        script {
-                            try {
-                                githubNotify(context: 'CI / Tests', status: 'SUCCESS', description: 'Tests passed')
-                            } catch (err) {
-                                echo "githubNotify not available: ${err}"
-                            }
+                    script {
+                        try {
+                            githubNotify(context: 'CI / Tests', status: 'SUCCESS', description: 'Tests passed')
+                        } catch (err) {
+                            echo "githubNotify not available: ${err}"
                         }
                     }
                 }
                 failure {
-                    steps {
-                        script {
-                            try {
-                                githubNotify(context: 'CI / Tests', status: 'FAILURE', description: 'Tests failed')
-                            } catch (err) {
-                                echo "githubNotify not available: ${err}"
-                            }
+                    script {
+                        try {
+                            githubNotify(context: 'CI / Tests', status: 'FAILURE', description: 'Tests failed')
+                        } catch (err) {
+                            echo "githubNotify not available: ${err}"
                         }
                     }
                 }
                 always {
-                    steps {
-                        script {
-                            if (fileExists("${TEST_REPORT}")) {
-                                junit allowEmptyResults: false, testResults: "${TEST_REPORT}"
-                            } else {
-                                echo "No test report found at ${TEST_REPORT}; skipping junit step."
-                            }
+                    script {
+                        if (fileExists("${TEST_REPORT}")) {
+                            junit allowEmptyResults: false, testResults: "${TEST_REPORT}"
+                        } else {
+                            echo "No test report found at ${TEST_REPORT}; skipping junit step."
                         }
                     }
                 }
