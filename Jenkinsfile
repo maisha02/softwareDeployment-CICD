@@ -8,7 +8,6 @@ pipeline {
     stages {
         pipeline {
             agent any
-
             stages {
                 stage('Prepare') {
                     steps {
