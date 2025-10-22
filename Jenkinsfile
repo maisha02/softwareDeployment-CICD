@@ -1,20 +1,80 @@
 pipeline {
-    agent any
+  agent any
 
-    stages {
-        stage('Build Docker image') {
-            steps {
-                sh 'docker build -t python-flask-app:latest .'
-            }
-        }
+  parameters {
+    string(name: 'EC2_HOST', defaultValue: 'ubuntu@ec2-54-253-29-16.ap-southeast-2.compute.amazonaws.com', description: 'SSH target for deployment (user@host)')
+    string(name: 'DOCKERHUB_USER', defaultValue: 'zerog123', description: 'Docker Hub username')
+    string(name: 'IMAGE_NAME', defaultValue: 'python-flask-app', description: 'Image name')
+    string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Image tag')
+  }
 
-        stage('Run container') {
-            steps {
-                // Run detached without --rm so the container persists after the pipeline
-                sh 'docker run -d -p 5000:5000 --name python-flask-app-run python-flask-app:latest'
-            }
+  environment {
+    // IMAGE will be computed at runtime as EFFECTIVE_IMAGE; keep these as defaults
+    IMAGE = "${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}"
+    LOCAL_IMAGE = "${IMAGE_NAME}:${IMAGE_TAG}"
+  }
+
+  stages {
+    stage('Prepare') {
+      steps {
+        script {
+          // If user provided a full image via env DOCKER_BFLASK_IMAGE, use it; otherwise use parameter-derived IMAGE
+          def effective = env.DOCKER_BFLASK_IMAGE ?: env.IMAGE
+          env.EFFECTIVE_IMAGE = effective
+          echo "Effective image will be: ${env.EFFECTIVE_IMAGE}"
+          // Determine credential id for registry (env DOCKER_REGISTRY_CREDS if present)
+          env.REG_CRED_ID = env.DOCKER_REGISTRY_CREDS ?: 'dockerhub'
+          echo "Using registry credential id: ${env.REG_CRED_ID}"
         }
+      }
+    }
+    stage('Build image') {
+      steps {
+        script {
+          // Build and tag using EFFECTIVE_IMAGE so we push the exact name you expect
+          echo "Building ${env.EFFECTIVE_IMAGE}"
+          sh "docker build -t ${env.EFFECTIVE_IMAGE} ."
+        }
+      }
     }
 
-    // Note: post cleanup removed so containers and images persist after the pipeline
+    stage('Push to Docker Hub') {
+      steps {
+        // Uses the credential id provided via env DOCKER_REGISTRY_CREDS (or 'dockerhub')
+        script {
+          def cred = env.REG_CRED_ID ?: 'dockerhub'
+          echo "Logging into registry with credentials id: ${cred}"
+          withCredentials([usernamePassword(credentialsId: cred, usernameVariable: 'DH_USER', passwordVariable: 'DH_PW')]) {
+            sh 'echo $DH_PW | docker login -u $DH_USER --password-stdin'
+            sh "docker push ${env.EFFECTIVE_IMAGE}"
+          }
+        }
+      }
+    }
+
+    stage('Deploy to EC2') {
+      steps {
+        // Requires an SSH credential (private key) with id 'EC2_SSH' configured in Jenkins
+        sshagent (credentials: ['EC2_SSH']) {
+          // Pull image and restart container on remote host
+          sh '''
+            ssh -o StrictHostKeyChecking=no ${EC2_HOST} \
+              "docker pull ${EFFECTIVE_IMAGE} && \
+               docker stop ${IMAGE_NAME}-run || true && \
+               docker rm ${IMAGE_NAME}-run || true && \
+               docker run -d -p 5000:5000 --name ${IMAGE_NAME}-run ${EFFECTIVE_IMAGE}"
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "Deployment succeeded: ${IMAGE} deployed to ${EC2_HOST}"
+    }
+    failure {
+      echo 'Deployment failed'
+    }
+  }
 }
