@@ -63,10 +63,20 @@ pipeline {
       steps {
         // Use SSH private key from Jenkins credentials and pass it to ssh via -i so the pipeline doesn't require the ssh-agent plugin
         withCredentials([sshUserPrivateKey(credentialsId: 'EC2_SSH', keyFileVariable: 'EC2_KEY', usernameVariable: 'EC2_USER')]) {
+          // Compute SSH target: if EC2_HOST already contains user@host, use it; otherwise prepend the username from the credential
+          script {
+            def sshTarget = ''
+            if (env.EC2_HOST?.contains('@')) {
+              sshTarget = env.EC2_HOST
+            } else {
+              sshTarget = "${EC2_USER}@${EC2_HOST}"
+            }
+            env.SSH_TARGET = sshTarget
+          }
           // Pull image and restart container on remote host. Enable verbose ssh logging to surface connection/auth errors.
           sh '''
             set -x
-            ssh -i "$EC2_KEY" -o StrictHostKeyChecking=no -o BatchMode=yes -vvv $EC2_USER@${EC2_HOST} \
+            ssh -i "$EC2_KEY" -o StrictHostKeyChecking=no -o BatchMode=yes -vvv "$SSH_TARGET" \
               "docker pull ${EFFECTIVE_IMAGE} && \
                docker stop ${IMAGE_NAME}-run || true && \
                docker rm ${IMAGE_NAME}-run || true && \
