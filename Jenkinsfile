@@ -10,15 +10,11 @@ pipeline {
 
         stage('Run container') {
             steps {
-                sh 'docker run --rm -d -p 5000:5000 --name python-flask-app-run python-flask-app:latest || true'
+                // Run detached without --rm so the container persists after the pipeline
+                sh 'docker run -d -p 5000:5000 --name python-flask-app-run python-flask-app:latest'
             }
         }
     }
 
-    post {
-        always {
-            sh 'docker rm -f python-flask-app-run || true'
-            cleanWs()
-        }
-    }
+    // Note: post cleanup removed so containers and images persist after the pipeline
 }
