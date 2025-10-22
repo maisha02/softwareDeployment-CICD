@@ -1,4 +1,5 @@
 pipeline {
+    // Use a generic agent; some Jenkins instances don't allow the 'docker' agent block.
     agent any
 
     environment {
@@ -6,94 +7,27 @@ pipeline {
     }
 
     stages {
-        pipeline {
-            agent any
-            stages {
-                stage('Prepare') {
-                    steps {
-                        script {
-                            echo 'Preparing agent: attempting to install git and docker if possible (requires sudo)'
-                            // Try apt-get first (Debian/Ubuntu) — if not available, continue
-                            sh '''
-                                if command -v apt-get >/dev/null 2>&1; then
-                                    sudo apt-get update -y || true
-                                    sudo apt-get install -y git docker.io || true
-                                else
-                                    echo 'apt-get not found; skipping package install'
-                                fi
-                            '''
-                        }
-                    }
-                }
-
-                stage('Build Docker image') {
-                    steps {
-                        script {
-                            // Build a Docker image named python-flask-app
-                            if (sh(script: 'which docker >/dev/null 2>&1', returnStatus: true) == 0) {
-                                sh "docker build -t python-flask-app:latest ."
-                            } else {
-                                echo 'Docker not available on agent; skipping docker build'
-                            }
-                        }
-                    }
-                }
-
-                stage('Run container') {
-                    steps {
-                        script {
-                            if (sh(script: 'which docker >/dev/null 2>&1', returnStatus: true) == 0) {
-                                // Run container in detached mode, map port 5000
-                                sh "docker run --rm -d -p 5000:5000 --name python-flask-app-run python-flask-app:latest || true"
-                                echo 'Container started (if image existed).'
-                            } else {
-                                echo 'Docker not available on agent; cannot run container.'
-                            }
-                        }
-                    }
-                }
-            }
-pipeline {
-    agent any
-
-    stages {
-        stage('Prepare') {
+        stage('Run tests') {
             steps {
                 script {
-                    echo 'Preparing agent: attempting to install git and docker if possible (requires sudo)'
-                    sh '''
-                        if command -v apt-get >/dev/null 2>&1; then
-                            sudo apt-get update -y || true
-                            sudo apt-get install -y git docker.io || true
-                        else
-                            echo 'apt-get not found; skipping package install'
-                        fi
-                    '''
-                }
-            }
-        }
-
-        stage('Build Docker image') {
-            steps {
-                script {
-                    if (sh(script: 'which docker >/dev/null 2>&1', returnStatus: true) == 0) {
-                        sh 'docker build -t python-flask-app:latest .'
+                    // If docker is available on the node, run tests inside the official Python image
+                    def dockerAvailable = (sh(script: 'which docker >/dev/null 2>&1', returnStatus: true) == 0)
+                    if (dockerAvailable) {
+                        echo 'Docker detected on agent — running tests inside python:3.12-slim container'
+                        // Mount workspace into the container so results are written back to Jenkins workspace
+                        sh "docker run --rm -v ${WORKSPACE}:/workspace -w /workspace python:3.12-slim bash -lc \"pip install --no-cache-dir -r requirements.txt && pytest --junitxml=${TEST_REPORT} -q\""
                     } else {
-                        echo 'Docker not available on agent; skipping docker build'
+                        echo 'Docker not available — running tests directly on the agent'
+                        // Try running tests directly on the node. Ensure Python is available on the agent.
+                        sh 'python3 -m venv venv || true'
+                        sh '. venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt && pytest --junitxml=${TEST_REPORT} -q'
                     }
                 }
             }
-        }
-
-        stage('Run container') {
-            steps {
-                script {
-                    if (sh(script: 'which docker >/dev/null 2>&1', returnStatus: true) == 0) {
-                        sh 'docker run --rm -d -p 5000:5000 --name python-flask-app-run python-flask-app:latest || true'
-                        echo 'Container started (if image existed).'
-                    } else {
-                        echo 'Docker not available on agent; cannot run container.'
-                    }
+            post {
+                always {
+                    // Publish JUnit report (will fail the stage if no results found)
+                    junit allowEmptyResults: false, testResults: "${TEST_REPORT}"
                 }
             }
         }
@@ -101,12 +35,7 @@ pipeline {
 
     post {
         always {
-            script {
-                if (sh(script: 'which docker >/dev/null 2>&1', returnStatus: true) == 0) {
-                    sh 'docker rm -f python-flask-app-run || true'
-                }
-                cleanWs()
-            }
+            cleanWs()
         }
     }
 }
