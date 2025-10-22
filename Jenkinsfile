@@ -61,12 +61,12 @@ pipeline {
 
     stage('Deploy to EC2') {
       steps {
-        // Requires an SSH credential (private key) with id 'EC2_SSH' configured in Jenkins
-        sshagent (credentials: ['EC2_SSH']) {
+        // Use SSH private key from Jenkins credentials and pass it to ssh via -i so the pipeline doesn't require the ssh-agent plugin
+        withCredentials([sshUserPrivateKey(credentialsId: 'af3db482-5f36-4258-817f-abdbecabb900', keyFileVariable: 'EC2_KEY', usernameVariable: 'EC2_USER')]) {
           // Pull image and restart container on remote host. Enable verbose ssh logging to surface connection/auth errors.
           sh '''
             set -x
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -vvv ${EC2_HOST} \
+            ssh -i "$EC2_KEY" -o StrictHostKeyChecking=no -o BatchMode=yes -vvv $EC2_USER@${EC2_HOST} \
               "docker pull ${EFFECTIVE_IMAGE} && \
                docker stop ${IMAGE_NAME}-run || true && \
                docker rm ${IMAGE_NAME}-run || true && \
