@@ -9,8 +9,12 @@ pipeline {
         stage('Run tests') {
             steps {
                 script {
-                    // Notify GitHub that build is pending
-                    githubNotify(context: 'CI / Tests', status: 'PENDING', description: 'Tests running')
+                    // Notify GitHub that build is pending (guarded in case plugin isn't installed)
+                    try {
+                        githubNotify(context: 'CI / Tests', status: 'PENDING', description: 'Tests running')
+                    } catch (err) {
+                        echo "githubNotify not available: ${err}"
+                    }
 
                     def dockerAvailable = (sh(script: 'which docker >/dev/null 2>&1', returnStatus: true) == 0)
                     if (dockerAvailable) {
@@ -25,13 +29,37 @@ pipeline {
             }
             post {
                 success {
-                    githubNotify(context: 'CI / Tests', status: 'SUCCESS', description: 'Tests passed')
+                    steps {
+                        script {
+                            try {
+                                githubNotify(context: 'CI / Tests', status: 'SUCCESS', description: 'Tests passed')
+                            } catch (err) {
+                                echo "githubNotify not available: ${err}"
+                            }
+                        }
+                    }
                 }
                 failure {
-                    githubNotify(context: 'CI / Tests', status: 'FAILURE', description: 'Tests failed')
+                    steps {
+                        script {
+                            try {
+                                githubNotify(context: 'CI / Tests', status: 'FAILURE', description: 'Tests failed')
+                            } catch (err) {
+                                echo "githubNotify not available: ${err}"
+                            }
+                        }
+                    }
                 }
                 always {
-                    junit allowEmptyResults: false, testResults: "${TEST_REPORT}"
+                    steps {
+                        script {
+                            if (fileExists("${TEST_REPORT}")) {
+                                junit allowEmptyResults: false, testResults: "${TEST_REPORT}"
+                            } else {
+                                echo "No test report found at ${TEST_REPORT}; skipping junit step."
+                            }
+                        }
+                    }
                 }
             }
         }
