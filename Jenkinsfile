@@ -18,10 +18,15 @@ pipeline {
     stage('Prepare') {
       steps {
         script {
-          // If user provided a full image via env DOCKER_BFLASK_IMAGE, use it; otherwise use parameter-derived IMAGE
-          def effective = env.DOCKER_BFLASK_IMAGE ?: env.IMAGE
+          // Determine tag: if user left IMAGE_TAG as 'latest', use BUILD_NUMBER for immutable tags
+          def resolvedTag = params.IMAGE_TAG == 'latest' ? env.BUILD_NUMBER : params.IMAGE_TAG
+          env.IMAGE_TAG = resolvedTag
+
+          // If user provided a full image via env DOCKER_BFLASK_IMAGE, use it; otherwise build from params
+          def effective = env.DOCKER_BFLASK_IMAGE ?: "${params.DOCKERHUB_USER}/${params.IMAGE_NAME}:${resolvedTag}"
           env.EFFECTIVE_IMAGE = effective
           echo "Effective image will be: ${env.EFFECTIVE_IMAGE}"
+
           // Determine credential id for registry (env DOCKER_REGISTRY_CREDS if present)
           env.REG_CRED_ID = env.DOCKER_REGISTRY_CREDS ?: 'dockerhub'
           echo "Using registry credential id: ${env.REG_CRED_ID}"
@@ -47,6 +52,8 @@ pipeline {
           withCredentials([usernamePassword(credentialsId: cred, usernameVariable: 'DH_USER', passwordVariable: 'DH_PW')]) {
             sh 'echo $DH_PW | docker login -u $DH_USER --password-stdin'
             sh "docker push ${env.EFFECTIVE_IMAGE}"
+            // Verify the image is available in the registry by attempting a pull (will fail the stage if not)
+            sh "docker pull ${env.EFFECTIVE_IMAGE} || (echo 'ERROR: verification pull failed for ${env.EFFECTIVE_IMAGE}' && exit 1)"
           }
         }
       }
@@ -56,9 +63,10 @@ pipeline {
       steps {
         // Requires an SSH credential (private key) with id 'EC2_SSH' configured in Jenkins
         sshagent (credentials: ['EC2_SSH']) {
-          // Pull image and restart container on remote host
+          // Pull image and restart container on remote host. Enable verbose ssh logging to surface connection/auth errors.
           sh '''
-            ssh -o StrictHostKeyChecking=no ${EC2_HOST} \
+            set -x
+            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -vvv ${EC2_HOST} \
               "docker pull ${EFFECTIVE_IMAGE} && \
                docker stop ${IMAGE_NAME}-run || true && \
                docker rm ${IMAGE_NAME}-run || true && \
